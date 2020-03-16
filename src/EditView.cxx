@@ -2058,6 +2058,13 @@ void EditView::DrawLine(Surface *surface, const EditModel &model, const ViewStyl
 	if (phase & drawText) {
 		DrawForeground(surface, model, vsDraw, ll, lineVisible, rcLine, lineRange, posLineStart, xStart,
 			subLine, background);
+        const StyledText stMargin = model.pdoc->MarginStyledText(line);
+        if (stMargin.text && ValidStyledText(vsDraw, vsDraw.marginStyleOffset, stMargin)) {
+                PRectangle rcEOLAnnotation=rcLine;
+                rcEOLAnnotation.left=xStart+ll->positions[lineRange.end]-ll->positions[lineRange.start];
+                DrawStyledText(surface, vsDraw, vsDraw.marginStyleOffset, rcEOLAnnotation,
+                    stMargin, 0, stMargin.length, drawAll);
+        }
 	}
 
 	if (phase & drawIndentationGuides) {
