@@ -1285,6 +1285,109 @@ void EditView::DrawFoldDisplayText(Surface *surface, const EditModel &model, con
 	}
 }
 
+void EditView::DrawEOLAnnotationText(Surface *surface, const EditModel &model, const ViewStyle &vsDraw, const LineLayout *ll,
+                              Sci::Line line, int xStart, PRectangle rcLine, int subLine, XYACCUMULATOR subLineStart, DrawPhase phase) {
+    const bool lastSubLine = subLine == (ll->lines - 1);
+    if (!lastSubLine)
+        return;
+
+    const char *text = NULL;//model.GetFoldDisplayText(line);
+
+    const StyledText stMargin = model.pdoc->MarginStyledText(line);
+    if (stMargin.text && ValidStyledText(vsDraw, vsDraw.marginStyleOffset, stMargin)) {
+        text=stMargin.text;
+    /*               PRectangle rcEOLAnnotation=rcLine;
+                   rcEOLAnnotation.left=xStart+ll->positions[lineRange.end]-ll->positions[lineRange.start];
+                   DrawStyledText(surface, vsDraw, vsDraw.marginStyleOffset, rcEOLAnnotation,
+                       stMargin, 0, stMargin.length, drawAll);
+                       */
+    }
+    if (!text)
+        return;
+
+    PRectangle rcSegment = rcLine;
+    const std::string_view foldDisplayText(text);
+    FontAlias fontText = vsDraw.styles[STYLE_FOLDDISPLAYTEXT].font;
+    const int widthFoldDisplayText = static_cast<int>(surface->WidthText(fontText, foldDisplayText));
+
+    int eolInSelection = 0;
+    int alpha = SC_ALPHA_NOALPHA;
+    if (!hideSelection) {
+        const Sci::Position posAfterLineEnd = model.pdoc->LineStart(line + 1);
+        eolInSelection = (subLine == (ll->lines - 1)) ? model.sel.InSelectionForEOL(posAfterLineEnd) : 0;
+        alpha = (eolInSelection == 1) ? vsDraw.selAlpha : vsDraw.selAdditionalAlpha;
+    }
+
+    const XYPOSITION spaceWidth = vsDraw.styles[ll->EndLineStyle()].spaceWidth;
+    const XYPOSITION virtualSpace = model.sel.VirtualSpaceFor(
+        model.pdoc->LineEnd(line)) * spaceWidth;
+    rcSegment.left = xStart + static_cast<XYPOSITION>(ll->positions[ll->numCharsInLine] - subLineStart) + virtualSpace + vsDraw.aveCharWidth;
+    rcSegment.right = rcSegment.left + static_cast<XYPOSITION>(widthFoldDisplayText);
+
+    const ColourOptional background = vsDraw.Background(model.pdoc->GetMark(line), model.caret.active, ll->containsCaret);
+    ColourDesired textFore = vsDraw.styles[STYLE_FOLDDISPLAYTEXT].fore;
+    if (eolInSelection && (vsDraw.selColours.fore.isSet)) {
+        textFore = (eolInSelection == 1) ? vsDraw.selColours.fore : vsDraw.selAdditionalForeground;
+    }
+    const ColourDesired textBack = TextBackground(model, vsDraw, ll, background, eolInSelection,
+                                            false, STYLE_FOLDDISPLAYTEXT, -1);
+
+    if (model.trackLineWidth) {
+        if (rcSegment.right + 1> lineWidthMaxSeen) {
+            // Fold display text border drawn on rcSegment.right with width 1 is the last visble object of the line
+            lineWidthMaxSeen = static_cast<int>(rcSegment.right + 1);
+        }
+    }
+
+    if (phase & drawBack) {
+        surface->FillRectangle(rcSegment, textBack);
+
+        // Fill Remainder of the line
+        PRectangle rcRemainder = rcSegment;
+        rcRemainder.left = rcRemainder.right;
+        if (rcRemainder.left < rcLine.left)
+            rcRemainder.left = rcLine.left;
+        rcRemainder.right = rcLine.right;
+        FillLineRemainder(surface, model, vsDraw, ll, line, rcRemainder, subLine);
+    }
+
+    if (phase & drawText) {
+        if (phasesDraw != phasesOne) {
+            surface->DrawTextTransparent(rcSegment, fontText,
+                rcSegment.top + vsDraw.maxAscent, foldDisplayText,
+                textFore);
+        } else {
+            surface->DrawTextNoClip(rcSegment, fontText,
+                rcSegment.top + vsDraw.maxAscent, foldDisplayText,
+                textFore, textBack);
+        }
+    }
+
+    if (phase & drawIndicatorsFore) {
+        if (model.foldDisplayTextStyle == SC_FOLDDISPLAYTEXT_BOXED) {
+            surface->PenColour(textFore);
+            PRectangle rcBox = rcSegment;
+            rcBox.left = std::round(rcSegment.left);
+            rcBox.right = std::round(rcSegment.right);
+            const IntegerRectangle ircBox(rcBox);
+            surface->MoveTo(ircBox.left, ircBox.top);
+            surface->LineTo(ircBox.left, ircBox.bottom);
+            surface->MoveTo(ircBox.right, ircBox.top);
+            surface->LineTo(ircBox.right, ircBox.bottom);
+            surface->MoveTo(ircBox.left, ircBox.top);
+            surface->LineTo(ircBox.right, ircBox.top);
+            surface->MoveTo(ircBox.left, ircBox.bottom - 1);
+            surface->LineTo(ircBox.right, ircBox.bottom - 1);
+        }
+    }
+
+    if (phase & drawSelectionTranslucent) {
+        if (eolInSelection && vsDraw.selColours.back.isSet && (line < model.pdoc->LinesTotal() - 1) && alpha != SC_ALPHA_NOALPHA) {
+            SimpleAlphaRectangle(surface, rcSegment, SelectionBackground(vsDraw, eolInSelection == 1, model.primarySelection), alpha);
+        }
+    }
+}
+
 static constexpr bool AnnotationBoxedOrIndented(int annotationVisible) noexcept {
 	return annotationVisible == ANNOTATION_BOXED || annotationVisible == ANNOTATION_INDENTED;
 }
@@ -2058,13 +2161,6 @@ void EditView::DrawLine(Surface *surface, const EditModel &model, const ViewStyl
 	if (phase & drawText) {
 		DrawForeground(surface, model, vsDraw, ll, lineVisible, rcLine, lineRange, posLineStart, xStart,
 			subLine, background);
-        const StyledText stMargin = model.pdoc->MarginStyledText(line);
-        if (stMargin.text && ValidStyledText(vsDraw, vsDraw.marginStyleOffset, stMargin)) {
-                PRectangle rcEOLAnnotation=rcLine;
-                rcEOLAnnotation.left=xStart+ll->positions[lineRange.end]-ll->positions[lineRange.start];
-                DrawStyledText(surface, vsDraw, vsDraw.marginStyleOffset, rcEOLAnnotation,
-                    stMargin, 0, stMargin.length, drawAll);
-        }
 	}
 
 	if (phase & drawIndentationGuides) {
@@ -2077,6 +2173,8 @@ void EditView::DrawLine(Surface *surface, const EditModel &model, const ViewStyl
 	}
 
 	DrawFoldDisplayText(surface, model, vsDraw, ll, line, xStart, rcLine, subLine, subLineStart, phase);
+    DrawEOLAnnotationText(surface, model, vsDraw, ll, line, xStart, rcLine, subLine, subLineStart, phase);
+
 
 	if (phasesDraw == phasesOne) {
 		DrawEOL(surface, model, vsDraw, ll, rcLine, line, lineRange.end,
