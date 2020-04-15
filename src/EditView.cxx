@@ -1200,7 +1200,6 @@ void EditView::DrawFoldDisplayText(Surface *surface, const EditModel &model, con
 
 	const char *text = model.GetFoldDisplayText(line);
 	if (!text)
-        //text = "folded";
 		return;
 
 	PRectangle rcSegment = rcLine;
@@ -1302,12 +1301,11 @@ void EditView::DrawEOLAnnotationText(Surface *surface, const EditModel &model, c
     }
     if (!text) {
       return;
-      //text="Default Annotation";
     }
 
     PRectangle rcSegment = rcLine;
-    const std::string_view foldDisplayText(text);
-    FontAlias fontText = vsDraw.styles[STYLE_FOLDDISPLAYTEXT].font;
+    const std::string foldDisplayText(text, stMargin.length);
+    FontAlias fontText = vsDraw.styles[stMargin.style].font;
     const int widthFoldDisplayText = static_cast<int>(surface->WidthText(fontText, foldDisplayText));
 
     int eolInSelection = 0;
@@ -1329,12 +1327,12 @@ void EditView::DrawEOLAnnotationText(Surface *surface, const EditModel &model, c
     rcSegment.right = rcSegment.left + static_cast<XYPOSITION>(widthFoldDisplayText);
 
     const ColourOptional background = vsDraw.Background(model.pdoc->GetMark(line), model.caret.active, ll->containsCaret);
-    ColourDesired textFore = vsDraw.styles[STYLE_FOLDDISPLAYTEXT].fore;
+    ColourDesired textFore = vsDraw.styles[stMargin.style].fore;
     if (eolInSelection && (vsDraw.selColours.fore.isSet)) {
         textFore = (eolInSelection == 1) ? vsDraw.selColours.fore : vsDraw.selAdditionalForeground;
     }
     const ColourDesired textBack = TextBackground(model, vsDraw, ll, background, eolInSelection,
-                                            false, STYLE_FOLDDISPLAYTEXT, -1);
+                                            false, stMargin.style, -1);
 
     if (model.trackLineWidth) {
         if (rcSegment.right + 1> lineWidthMaxSeen) {
@@ -1368,7 +1366,7 @@ void EditView::DrawEOLAnnotationText(Surface *surface, const EditModel &model, c
     }
 
     if (phase & drawIndicatorsFore) {
-        if (model.foldDisplayTextStyle == SC_FOLDDISPLAYTEXT_BOXED) {
+        if (vsDraw.annotationVisible == ANNOTATION_BOXED || model.foldDisplayTextStyle == SC_FOLDDISPLAYTEXT_BOXED) {
             surface->PenColour(textFore);
             PRectangle rcBox = rcSegment;
             rcBox.left = std::round(rcSegment.left);
