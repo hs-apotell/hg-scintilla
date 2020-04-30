@@ -1291,22 +1291,21 @@ void EditView::DrawEOLAnnotationText(Surface *surface, const EditModel &model, c
     if (!lastSubLine)
         return;
 
-    const char *text = NULL;//model.GetFoldDisplayText(line);
-    const char *text2 = model.GetFoldDisplayText(line);
-    //text2="folded";
+    const char *text = NULL;
+    const char *textFoldDisplay = model.GetFoldDisplayText(line);
 
-    const StyledText stMargin = model.pdoc->MarginStyledText(line);
-    if (stMargin.text && ValidStyledText(vsDraw, vsDraw.marginStyleOffset, stMargin)) {
-        text=stMargin.text;
+    const StyledText stEOLAnnotation = model.pdoc->EOLAnnotationStyledText(line);
+    if (stEOLAnnotation.text && ValidStyledText(vsDraw, vsDraw.eolAnnotationStyleOffset, stEOLAnnotation)) {
+        text=stEOLAnnotation.text;
     }
     if (!text) {
       return;
     }
 
     PRectangle rcSegment = rcLine;
-    const std::string foldDisplayText(text, stMargin.length);
-    FontAlias fontText = vsDraw.styles[stMargin.style].font;
-    const int widthFoldDisplayText = static_cast<int>(surface->WidthText(fontText, foldDisplayText));
+    const std::string_view eolAnnotationText(text, stEOLAnnotation.length);
+    FontAlias fontText = vsDraw.styles[stEOLAnnotation.style].font;
+    const int widthEOLAnnotationText = static_cast<int>(surface->WidthText(fontText, eolAnnotationText));
 
     int eolInSelection = 0;
     int alpha = SC_ALPHA_NOALPHA;
@@ -1320,19 +1319,19 @@ void EditView::DrawEOLAnnotationText(Surface *surface, const EditModel &model, c
     const XYPOSITION virtualSpace = model.sel.VirtualSpaceFor(
         model.pdoc->LineEnd(line)) * spaceWidth;
     rcSegment.left = xStart + static_cast<XYPOSITION>(ll->positions[ll->numCharsInLine] - subLineStart) + virtualSpace + vsDraw.aveCharWidth;
-    if (text2) {
-      const std::string_view foldDisplayText2(text2);
-      rcSegment.left += (static_cast<int>(surface->WidthText(fontText, foldDisplayText2))+virtualSpace +vsDraw.aveCharWidth);
+    if (textFoldDisplay) {
+      const std::string_view foldDisplayText(textFoldDisplay);
+      rcSegment.left += (static_cast<int>(surface->WidthText(fontText, foldDisplayText))+virtualSpace +vsDraw.aveCharWidth);
     }     
-    rcSegment.right = rcSegment.left + static_cast<XYPOSITION>(widthFoldDisplayText);
+    rcSegment.right = rcSegment.left + static_cast<XYPOSITION>(widthEOLAnnotationText);
 
     const ColourOptional background = vsDraw.Background(model.pdoc->GetMark(line), model.caret.active, ll->containsCaret);
-    ColourDesired textFore = vsDraw.styles[stMargin.style].fore;
+    ColourDesired textFore = vsDraw.styles[stEOLAnnotation.style].fore;
     if (eolInSelection && (vsDraw.selColours.fore.isSet)) {
         textFore = (eolInSelection == 1) ? vsDraw.selColours.fore : vsDraw.selAdditionalForeground;
     }
     const ColourDesired textBack = TextBackground(model, vsDraw, ll, background, eolInSelection,
-                                            false, stMargin.style, -1);
+                                            false, stEOLAnnotation.style, -1);
 
     if (model.trackLineWidth) {
         if (rcSegment.right + 1> lineWidthMaxSeen) {
@@ -1356,17 +1355,17 @@ void EditView::DrawEOLAnnotationText(Surface *surface, const EditModel &model, c
     if (phase & drawText) {
         if (phasesDraw != phasesOne) {
             surface->DrawTextTransparent(rcSegment, fontText,
-                rcSegment.top + vsDraw.maxAscent, foldDisplayText,
+                rcSegment.top + vsDraw.maxAscent, eolAnnotationText,
                 textFore);
         } else {
             surface->DrawTextNoClip(rcSegment, fontText,
-                rcSegment.top + vsDraw.maxAscent, foldDisplayText,
+                rcSegment.top + vsDraw.maxAscent, eolAnnotationText,
                 textFore, textBack);
         }
     }
 
     if (phase & drawIndicatorsFore) {
-        if (vsDraw.annotationVisible == ANNOTATION_BOXED || model.foldDisplayTextStyle == SC_FOLDDISPLAYTEXT_BOXED) {
+        if (vsDraw.eolAnnotationVisible == EOLANNOTATION_BOXED ) {
             surface->PenColour(textFore);
             PRectangle rcBox = rcSegment;
             rcBox.left = std::round(rcSegment.left);
