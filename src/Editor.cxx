@@ -2121,6 +2121,7 @@ void Editor::ClearAll() {
 		if (!pdoc->IsReadOnly()) {
 			pcs->Clear();
 			pdoc->AnnotationClearAll();
+			pdoc->EOLAnnotationClearAll();
 			pdoc->MarginClearAll();
 		}
 	}
@@ -5292,6 +5293,13 @@ void Editor::SetAnnotationVisible(int visible) {
 	}
 }
 
+void Editor::SetEOLAnnotationVisible(int visible) {
+	if (vs.eolAnnotationVisible != visible) {
+		vs.eolAnnotationVisible = visible;
+		Redraw();
+	}
+}
+
 /**
  * Recursively expand a fold, making lines visible except where they have an unexpanded parent.
  */
@@ -8054,6 +8062,43 @@ sptr_t Editor::WndProc(unsigned int iMessage, uptr_t wParam, sptr_t lParam) {
 
 	case SCI_ANNOTATIONGETSTYLEOFFSET:
 		return vs.annotationStyleOffset;
+
+	case SCI_EOLANNOTATIONSETTEXT:
+		pdoc->EOLAnnotationSetText(static_cast<Sci::Line>(wParam), CharPtrFromSPtr(lParam));
+		break;
+
+	case SCI_EOLANNOTATIONGETTEXT: {
+			const StyledText st = pdoc->EOLAnnotationStyledText(static_cast<Sci::Line>(wParam));
+			return BytesResult(lParam, reinterpret_cast<const unsigned char *>(st.text), st.length);
+		}
+
+	case SCI_EOLANNOTATIONGETSTYLE: {
+			const StyledText st = pdoc->EOLAnnotationStyledText(static_cast<Sci::Line>(wParam));
+			return st.style;
+		}
+
+	case SCI_EOLANNOTATIONSETSTYLE:
+		pdoc->EOLAnnotationSetStyle(static_cast<Sci::Line>(wParam), static_cast<int>(lParam));
+		break;
+
+	case SCI_EOLANNOTATIONCLEARALL:
+		pdoc->EOLAnnotationClearAll();
+		break;
+
+	case SCI_EOLANNOTATIONSETVISIBLE:
+		SetEOLAnnotationVisible(static_cast<int>(wParam));
+		break;
+
+	case SCI_EOLANNOTATIONGETVISIBLE:
+		return vs.eolAnnotationVisible;
+
+	case SCI_EOLANNOTATIONSETSTYLEOFFSET:
+		vs.eolAnnotationStyleOffset = static_cast<int>(wParam);
+		InvalidateStyleRedraw();
+		break;
+
+	case SCI_EOLANNOTATIONGETSTYLEOFFSET:
+		return vs.eolAnnotationStyleOffset;
 
 	case SCI_RELEASEALLEXTENDEDSTYLES:
 		vs.ReleaseAllExtendedStyles();
