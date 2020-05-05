@@ -1050,7 +1050,7 @@ void EditView::DrawEOL(Surface *surface, const EditModel &model, const ViewStyle
 		rcSegment.left = rcLine.left;
 	rcSegment.right = rcLine.right;
 
-	const bool fillRemainder = !lastSubLine || !model.GetFoldDisplayText(line);
+	const bool fillRemainder = (!lastSubLine || !model.GetFoldDisplayText(line)) && !(model.pdoc->EOLAnnotationStyledText(line).text);
 	if (fillRemainder) {
 		// Fill the remainder of the line
 		FillLineRemainder(surface, model, vsDraw, ll, line, rcSegment, subLine);
@@ -2141,7 +2141,7 @@ void EditView::DrawLine(Surface *surface, const EditModel &model, const ViewStyl
 			DrawBackground(surface, model, vsDraw, ll, rcLine, lineRange, posLineStart, xStart,
 				subLine, background);
 			DrawFoldDisplayText(surface, model, vsDraw, ll, line, xStart, rcLine, subLine, subLineStart, drawBack);
-                        DrawEOLAnnotationText(surface, model, vsDraw, ll, line, xStart, rcLine, subLine, subLineStart, phase);
+                        DrawEOLAnnotationText(surface, model, vsDraw, ll, line, xStart, rcLine, subLine, subLineStart, drawBack);
 			phase = static_cast<DrawPhase>(phase & ~drawBack);	// Remove drawBack to not draw again in DrawFoldDisplayText
 			DrawEOL(surface, model, vsDraw, ll, rcLine, line, lineRange.end,
 				xStart, subLine, subLineStart, background);
