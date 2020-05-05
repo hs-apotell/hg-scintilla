@@ -835,7 +835,7 @@ static ColourDesired SelectionBackground(const ViewStyle &vsDraw, bool main, boo
 }
 
 static ColourDesired TextBackground(const EditModel &model, const ViewStyle &vsDraw, const LineLayout *ll,
-	ColourOptional background, int inSelection, bool inHotspot, int styleMain, Sci::Position i) {
+	ColourOptional background, int inSelection, bool inHotspot, size_t styleMain, Sci::Position i) {
 	if (inSelection == 1) {
 		if (vsDraw.selColours.back.isSet && (vsDraw.selAlpha == SC_ALPHA_NOALPHA)) {
 			return SelectionBackground(vsDraw, true, model.primarySelection);
@@ -1291,20 +1291,17 @@ void EditView::DrawEOLAnnotationText(Surface *surface, const EditModel &model, c
     if (!lastSubLine)
         return;
 
-    const char *text = NULL;
     const char *textFoldDisplay = model.GetFoldDisplayText(line);
 
     const StyledText stEOLAnnotation = model.pdoc->EOLAnnotationStyledText(line);
-    if (stEOLAnnotation.text && ValidStyledText(vsDraw, vsDraw.eolAnnotationStyleOffset, stEOLAnnotation)) {
-        text=stEOLAnnotation.text;
+    if (!stEOLAnnotation.text || !ValidStyledText(vsDraw, vsDraw.eolAnnotationStyleOffset, stEOLAnnotation)) {
+	return;
     }
-    if (!text) {
-      return;
-    }
+    const std::string_view eolAnnotationText(stEOLAnnotation.text, stEOLAnnotation.length);
+    const size_t style = stEOLAnnotation.style + vsDraw.eolAnnotationStyleOffset;
 
     PRectangle rcSegment = rcLine;
-    const std::string_view eolAnnotationText(text, stEOLAnnotation.length);
-    FontAlias fontText = vsDraw.styles[stEOLAnnotation.style].font;
+    FontAlias fontText = vsDraw.styles[style].font;
     const int widthEOLAnnotationText = static_cast<int>(surface->WidthText(fontText, eolAnnotationText));
 
     int eolInSelection = 0;
@@ -1326,12 +1323,12 @@ void EditView::DrawEOLAnnotationText(Surface *surface, const EditModel &model, c
     rcSegment.right = rcSegment.left + static_cast<XYPOSITION>(widthEOLAnnotationText);
 
     const ColourOptional background = vsDraw.Background(model.pdoc->GetMark(line), model.caret.active, ll->containsCaret);
-    ColourDesired textFore = vsDraw.styles[stEOLAnnotation.style].fore;
+    ColourDesired textFore = vsDraw.styles[style].fore;
     if (eolInSelection && (vsDraw.selColours.fore.isSet)) {
         textFore = (eolInSelection == 1) ? vsDraw.selColours.fore : vsDraw.selAdditionalForeground;
     }
     const ColourDesired textBack = TextBackground(model, vsDraw, ll, background, eolInSelection,
-                                            false, stEOLAnnotation.style, -1);
+                                            false, style, -1);
 
     if (model.trackLineWidth) {
         if (rcSegment.right + 1> lineWidthMaxSeen) {
@@ -2144,6 +2141,7 @@ void EditView::DrawLine(Surface *surface, const EditModel &model, const ViewStyl
 			DrawBackground(surface, model, vsDraw, ll, rcLine, lineRange, posLineStart, xStart,
 				subLine, background);
 			DrawFoldDisplayText(surface, model, vsDraw, ll, line, xStart, rcLine, subLine, subLineStart, drawBack);
+                        DrawEOLAnnotationText(surface, model, vsDraw, ll, line, xStart, rcLine, subLine, subLineStart, phase);
 			phase = static_cast<DrawPhase>(phase & ~drawBack);	// Remove drawBack to not draw again in DrawFoldDisplayText
 			DrawEOL(surface, model, vsDraw, ll, rcLine, line, lineRange.end,
 				xStart, subLine, subLineStart, background);
@@ -2174,7 +2172,7 @@ void EditView::DrawLine(Surface *surface, const EditModel &model, const ViewStyl
 	}
 
 	DrawFoldDisplayText(surface, model, vsDraw, ll, line, xStart, rcLine, subLine, subLineStart, phase);
-    DrawEOLAnnotationText(surface, model, vsDraw, ll, line, xStart, rcLine, subLine, subLineStart, phase);
+        DrawEOLAnnotationText(surface, model, vsDraw, ll, line, xStart, rcLine, subLine, subLineStart, phase);
 
 
 	if (phasesDraw == phasesOne) {
